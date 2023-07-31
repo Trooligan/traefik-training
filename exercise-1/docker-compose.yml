@@ -1,0 +1,103 @@
+version: '3'
+
+services:
+  web_service:
+    build: ./web_service/
+    expose:
+      - 3001
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
+    labels:
+      - "traefik.enable=true"
+    # configure 'webservice'-router host and pathprefix
+    # This service can now be accessed from url: webservice.webdev.test.localhost
+      - "traefik.http.routers.webservice.rule=Host(`webservice.webdev.test`)"
+      - "traefik.http.routers.webservice.rule=PathPrefix(`/`)"
+  
+  jenkins:
+    image: jenkins/jenkins:lts-jdk11
+    command: --httpsPort=8081
+    expose:
+      - 8081
+      - 50000
+    environment:
+    # Tell jenkins that we have path prefix
+      - JENKINS_OPTS=--prefix=/jenkins
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`webservice.webdev.test`)"
+      - "traefik.http.routers.jenkins.rule=PathPrefix(`/jenkins`)"
+
+  gitea:
+    image: gitea/gitea:latest
+    environment:
+      # Gitea root path
+      - ROOT_URL=http://git.webdev.test/gitserver/
+    expose:
+      - 3000
+    labels:
+      - "traefik.enable=true"
+    # Host + Pathprefix
+      - "traefik.http.routers.gitea.rule=Host(`git.webdev.test`)"
+      - "traefik.http.routers.gitea.rule=PathPrefix(`/gitserver`)"
+
+    # Middleware that strips that '/gitserver' part
+      - "traefik.http.routers.gitea.middlewares=gitea"
+      - "traefik.http.middlewares.gitea.stripprefix.prefixes=/gitserver"
+      - "traefik.http.middlewares.gitea.stripprefix.forceSlash=false"
+
+    # Configure port manually else Traefik forwards to ssh port (22)
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+
+  ttyd:
+    image: tsl0922/ttyd
+    labels:
+      - "traefik.http.routers.ttyd.rule=Host(`webservice.webdev.test`)"
+      - "traefik.http.routers.ttyd.rule=PathPrefix(`/ttyd`)"
+
+      - "traefik.http.routers.ttyd.middlewares=ttyd"
+      - "traefik.http.middlewares.ttyd.stripprefix.prefixes=/ttyd"
+      - "traefik.http.middlewares.ttyd.stripprefix.forceSlash=false"
+
+  reverse-proxy:
+    image: traefik:v2.5
+    # Enables the web UI and tells Traefik to listen to docker
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+    ports:
+      # The HTTP port
+      - "80:80"
+      # The HTTPS port
+      - "443:443"
+      # The Web UI (enabled by --api.insecure=true)
+      - "8080:8080"
+    volumes:
+      # Static configuration files
+      - /opt/traefik/trafik.toml:/etc/traefik/
+      - /opt/traefik/acme.json:/letsencrypt
+
+      # So that Traefik can listen to the Docker events, obv don't use in production
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+    labels:
+      #- "trafik.enable=false"
+      - "traefik.http.routers.traefik.rule=Host(`webdev.test`)"
+
+  whoami:
+      # A container that exposes an API to show its IP address
+      image: traefik/whoami
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.whoami.rule=Host(`webservice.webdev.test`)"
+        - "traefik.http.routers.whoami.rule=PathPrefix(`/whoami`)"
+
+      # All requests go to websecure entrypoint that is the HTTPS 443
+        - "traefik.http.routers.whoami.entrypoints=websecure"
+        - "traefik.http.routers.whoami.tls.certresolver=myresolver"

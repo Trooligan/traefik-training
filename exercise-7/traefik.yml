@@ -1,0 +1,41 @@
+api:
+  dashboard: true
+  insecure: true
+
+providers:
+  docker:
+    swarmMode: true
+    network: inbound
+    exposedByDefault: false
+
+log:
+  level: INFO
+
+accessLog: {}
+#  filters:    
+#    statusCodes:
+#      - "404"
+#    retryAttempts: true
+#    minDuration: "10ms"
+
+metrics:
+  prometheus:
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: your_email@example.com 
+      storage: acme.json
+      tlsChallenge: true

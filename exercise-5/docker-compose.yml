@@ -1,0 +1,154 @@
+version: '3.3'
+
+services:
+  traefik:
+    # The latest official supported Traefik docker image
+    image: traefik:v2.5
+    networks:
+      - traefik
+      - inbound
+    ports:
+      # Exposes port 80 for incomming web requests
+      - "80:80"
+      - "443:443"
+      # The Web UI port http://0.0.0.0:8080 (enabled by --api.insecure=true)
+      - "8080:8080"
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.yml:/etc/traefik/traefik.yml
+
+# Add the catapp service
+  catapp:
+     networks:
+      - inbound
+     # A Random Cat GIF generator application
+     image: mikesir87/cats:1.0
+     # We set a label to tell Traefik to assign a hostname to the new service
+     deploy:
+      labels:
+        - "traefik.enable=true"
+    # Routers
+        - "traefik.http.routers.catapp.rule=Host(`catapp.localhost`)"
+        - "traefik.http.routers.catapp.entrypoints=web"
+        - "traefik.http.routers.catapp.middlewares=test-redirectscheme"
+        - "traefik.http.routers.catapp-secure.rule=Host(`catapp.localhost`)"
+        - "traefik.http.routers.catapp-secure.entrypoints=websecure"
+        - "traefik.http.routers.catapp-secure.tls.certresolver=myresolver"
+        - "traefik.http.routers.catapp-secure.middlewares=basic-auth,test-compress,test-errorpages,test-ratelimit"
+
+    # Services
+        - "traefik.http.services.catapp.loadbalancer.server.port=5000"
+    
+    # BasicAuth Middleware
+        - "traefik.http.middlewares.basic-auth.basicauth.users=traefik:$$apr1$$.zPbdVg8$$LcHeyCZElH.JfxkxxlMPI.,user2:$$apr1$$XDrP1Fb1$$SZqSEjvNYW44vgJgI3iEP0"
+      
+    # Compress Middleware
+        - "traefik.http.middlewares.test-compress.compress=true"
+
+    # Rate Limit Middleware
+        - "traefik.http.middlewares.test-ratelimit.ratelimit.average=2"
+
+    # Error Pages Middleware
+        - "traefik.http.middlewares.test-errorpages.errors.status=400-599"
+        - "traefik.http.middlewares.test-errorpages.errors.service=error"
+        - "traefik.http.middlewares.test-errorpages.errors.query=/{status}.html"
+
+    # Redirect Scheme HTTP -> HTTPS
+        - "traefik.http.middlewares.test-redirectscheme.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.test-redirectscheme.redirectscheme.permanent=true"
+
+        - "traefik.docker.network=inbound"
+
+  whoami:
+      # A container that exposes an API to show its IP address
+      image: traefik/whoami
+      networks:
+        - inbound
+      deploy:
+        labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.whoami.rule=Host(`whoami.localhost`)"
+          - "traefik.http.routers.whoami.entrypoints=web"
+          - "traefik.http.services.whoami.loadbalancer.server.port=80"
+          - "traefik.http.services.whoami.loadbalancer.sticky.cookie=true"
+          - "traefik.http.services.whoami.loadbalancer.sticky.cookie.name=stickysvr"
+          - "traefik.docker.network=inbound"
+
+# Error Page service
+  error:
+    image: guillaumebriday/traefik-custom-error-pages
+    networks:
+      - inbound
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.error.rule=Host(`error.localhost`)"
+        - "traefik.http.routers.error.service=error"
+        - "traefik.http.services.error.loadbalancer.server.port=80"
+        - "traefik.http.routers.error.entrypoints=web"
+        - "traefik.docker.network=inbound"
+
+  prometheus:
+    image: prom/prometheus:v2.22.1
+    networks:
+      - inbound
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+    # Tell promethus where the config.file is located
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    deploy:
+      labels:
+       - "traefik.enable=true"
+       - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+       - "traefik.http.routers.prometheus.service=prometheus"
+       - "traefik.http.routers.prometheus.entrypoints=web"
+       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+       - "traefik.docker.network=inbound"
+      placement:
+         constraints:
+          - node.role==manager
+      restart_policy:
+        condition: on-failure
+  
+  grafana:
+    image: grafana/grafana:7.3.1
+    networks:
+      - inbound
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./grafana/config.monitoring
+    user: "104"
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+        - "traefik.http.routers.grafana.service=grafana"
+        - "traefik.http.routers.grafana.entrypoints=web"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+        - "traefik.docker.network=inbound"
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  traefik:
+    driver: overlay
+  inbound:
+    driver: overlay
+
+
+volumes:
+    prometheus_data: {}
+    grafana_data: {}

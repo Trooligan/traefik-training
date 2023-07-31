@@ -1,0 +1,50 @@
+api:
+  dashboard: true
+  insecure: true
+  debug: true
+
+providers:
+  docker:
+    swarmMode: true
+    network: inbound
+    exposedByDefault: false
+  file:
+    filename: "/etc/traefik/config.yml" # Link to the dynamic configuration
+    watch: true  # Watch for modifications
+
+log:
+  level: INFO
+
+accessLog: {}
+
+metrics:
+  prometheus:
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+    
+
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: your_email@outlook.com 
+      storage: acme.json
+      tlsChallenge: true
+
+experimental:
+  plugins:
+    traefik-maintenance:
+      moduleName: "github.com/TRIMM/traefik-maintenance"
+      version: "v1.0.1"
+    traefik-themepark:
+      moduleName: "github.com/packruler/traefik-themepark"
+      version: "v1.3.0"

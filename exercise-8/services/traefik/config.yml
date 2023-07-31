@@ -1,0 +1,26 @@
+http:
+    middlewares:
+        my-traefik-maintenance:
+            plugin:
+                traefik-maintenance:
+                    enabled: "true"
+                    filename: /etc/traefik/maintenance_test.html
+                    httpContentType: text/html; charset=utf-8
+                    httpResponseCode: "503"
+                    triggerFilename: /etc/traefik/maintenance_test.trigger
+        my-traefik-themepark:
+            plugin:
+                traefik-themepark:
+                    # The name of the supported application listed on https://docs.theme-park.dev/themes.
+                    app: sonarr
+
+                    # The name of the supported theme listed on https://docs.theme-park.dev/theme-options/ or https://docs.theme-park.dev/community-themes/
+                    theme: dark
+
+                    # baseUrl is optional if you want to use a self-hosted version of theme.park
+                    baseUrl: https://theme-park.dev
+
+                    # This currently only supports '4k-logo' and 'darker' addons. Future addons that follow a similar syntax will work as well.
+                    # For refernce: https://docs.theme-park.dev/themes/addons/
+                    addons:
+                    - 4k-logo

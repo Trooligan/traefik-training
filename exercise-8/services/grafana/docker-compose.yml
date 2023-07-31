@@ -1,0 +1,39 @@
+version: '3.3'
+
+services:
+  
+  grafana:
+    image: grafana/grafana:7.3.1
+    networks:
+      - inbound
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./config/config.monitoring
+    user: "104"
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+        - "traefik.http.routers.grafana.service=grafana"
+        - "traefik.http.routers.grafana.entrypoints=web"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+        - "traefik.docker.network=inbound"
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  inbound:
+    external: true
+
+volumes:
+    grafana_data: {}
+
+
+

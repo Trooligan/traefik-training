@@ -1,0 +1,27 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+api:
+  dashboard: true
+  insecure: true
+
+providers:
+  docker:
+    exposedByDefault: false
+    swarmMode: true
+    network: traefik-public
+
+log:
+  level: DEBUG
+
+
+certificatesResolvers:
+  myresolver:
+    acme:
+      email: your_email@example.com 
+      storage: acme.json
+      httpChallenge:
+        entryPoint: web

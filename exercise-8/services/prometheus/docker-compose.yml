@@ -1,0 +1,39 @@
+version: '3.3'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.22.1
+    networks:
+      - inbound
+    volumes:
+      - ./config/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+    # Tell promethus where the config.file is located
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    deploy:
+      labels:
+       - "traefik.enable=true"
+       - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+       - "traefik.http.routers.prometheus.service=prometheus"
+       - "traefik.http.routers.prometheus.entrypoints=web"
+       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+       - "traefik.docker.network=inbound"
+      placement:
+         constraints:
+          - node.role==manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  inbound:
+    external: true
+
+volumes:
+    prometheus_data: {}
+
+
+
